@@ -1,0 +1,117 @@
+---
+title: "Statistical Inference Course Project"
+author: "Gavin Leeper"
+date: "November 7, 2016"
+output:
+  html_document: default
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Part 1: Central Limit Theory Using Exponential Variables
+
+In our first section, we'd like to show the convergence predicted by the Central Limit Theorem by taking means of exponential variables. Here, we will look at the behavior of the mean of 40 exponential variables all with a rate parameter or lambda of 0.2. After we do this 1000 times, we will normalize each of our results by subtracting the theoretical mean of exponential variables, which is 1/lambda, and dividing by the standarad deviation, which is 1/lambda divided by the square root of the number of exponential variables in each simulation (num_var), here being the square root of 40. These represent the normalized means (norm_mns in the code below) of our simulations. We store the results of this simulation in a dataframe called results_df for graphing. I'm storing them as a variable "x" for simplicity. 
+``` {r,cache=TRUE}
+lambda <-.2
+num_var<-40
+num_sims<-1000
+exp_mean<-1/lambda
+exp_sd<-(1/lambda)/sqrt(num_var)
+
+mns = NULL
+for (i in 1 : num_sims) mns = c(mns, mean(rexp(num_var,lambda)))
+
+norm_mns<-(mns-(exp_mean))/exp_sd
+
+results_df<-data.frame(x = norm_mns)
+```
+Now, I can graph the density of our results in black and use the stat_function option to overlay the standarad normal distribution in red. We see that the two distributions look very similar, and the Central Limit Theory tells us that this semblance would continue to strengthen if we ran more simulations.
+
+```{r}
+library(ggplot2)
+results_p<-ggplot(results_df,aes(x))+geom_density()+ stat_function(fun = dnorm, colour = "red")
+results_p
+
+```
+
+We can also see convergence of our results to a standard normal distribution in the summary statistics. We see below that, approaching a standard normal, our results have a mean close to 0 and a standard deviation close to 1.
+
+```{r}
+mean(norm_mns)
+sd(norm_mns)
+```
+
+
+## Part 2: Analysis of the ToothGrowth Dataset
+
+In the second part of this assignment, we'll analyze the ToothGrowth dataset that comes with R. If we start by plotting the data, by treatment type, we'll notice distinct looking ranges for each of the dosage levels for each treatment.
+
+```{r}
+library(ggplot2)
+
+tooth_scatter <- ggplot(ToothGrowth, aes(x=dose, y=len)) + geom_point(shape=1)
+tooth_scatter+facet_grid(.~supp)
+
+```
+
+Let's use Student's t-tests between different groups in the data. First, I'll use the interaction() command to assign group labels to each of our observations. Then, I'll store subsets of the data by each of the groups so we can easily compare them.
+
+```{r}
+ToothGrowth$group = interaction(ToothGrowth$supp,ToothGrowth$dose)
+
+data_OJ.0.5<-ToothGrowth[ToothGrowth$group=="OJ.0.5",]
+data_OJ.1<-ToothGrowth[ToothGrowth$group=="OJ.1",]
+data_OJ.2<-ToothGrowth[ToothGrowth$group=="OJ.2",]
+data_OJ_overall<-ToothGrowth[ToothGrowth$supp=="OJ",]
+
+data_VC.0.5<-ToothGrowth[ToothGrowth$group=="VC.0.5",]
+data_VC.1<-ToothGrowth[ToothGrowth$group=="VC.1",]
+data_VC.2<-ToothGrowth[ToothGrowth$group=="VC.2",]
+data_VC_overall<-ToothGrowth[ToothGrowth$supp=="VC",]
+```
+
+Now that we have our groups of the data, we can use t.test to compare their means. For this analysis, let's assume that the variances of the underlying populations is the same, so we won't have to account for differing variances in our t-tests, as well as assuming that each population's tooth growth can be well approximated with a normal distribution. 
+
+We can start by comparing dosage levels within the orange juice treatment. Confirmation of the alternative hypothesis here would assert that there was a statistically significant change in tooth growth with variation of the dosage level. Comparing the group that received 0.5 mg/day of orange juice versus 1 mg/day, we get a 95% confidence interval for the difference in means that does not include 0, and we can thus conclude that these groups are significantly different. In fact, they are significantly different at a much stricter significance level than 5%.
+
+```{r}
+t.test(data_OJ.0.5$len,data_OJ.1$len)
+```
+
+We find a similar result comparing the 1 mg/day group to the 2 mg/day group, with a p value around 4%.
+
+```{r}
+t.test(data_OJ.1$len,data_OJ.2$len)
+```
+
+We can infer from the transitive property that the 2 mg/day group exhibited significantly more growth due to knowinf that it had significantly more than the 1 mg/day group, which in turn had significantly more than the 0.5 mg/day group, so a third test within this group isn't necessary. We can thus confirm that as you increase dosage level within the orange juice treatment group, you observe more growth. 
+
+Now let's repeat this analysis for the asorbic acid group, whose treatment is encoded in the dataset as "VC". For compactness, I'll have R just grab the 95% confidence intervals from each of these t tests and we can inspect whether they contain 0, in which case we'll accept the null hypothesis that the means of these groups are not significantly different from one another. We'll find that each of the groups is significantly different, with the negative values indicating that the mean of the second group in each case is larger than the mean of the first group. 
+
+```{r}
+t.test(data_VC.0.5$len,data_VC.1$len)$conf.int
+t.test(data_VC.1$len,data_VC.2$len)$conf.int
+```
+
+Again, we don't need to compare the 0.5 mg/day against the 2 mg/day due to the transitive property.
+
+Next, we can assess how groups with different treatments differ from each other at a given dosage level, for example 1 mg/day of orange juice versus 1 mg/day of asorbic acid. For the lower 2 dosage levels, the orange juice treatment causes significantly more growth than the asorbic acid treatment. However, at the 2 mg/day dosage level, there is no significant difference between the two.
+```{r}
+t.test(data_OJ.0.5$len,data_VC.0.5$len)$conf.int
+t.test(data_OJ.1$len,data_VC.1$len)$conf.int
+t.test(data_OJ.2$len,data_VC.2$len)$conf.int
+
+```
+
+That said, 2 mg/day of orange juice did have a significantly larger effect thant 1 mg/day of asorbic acid.
+```{r}
+t.test(data_OJ.2$len,data_VC.1$len)$conf.int
+```
+
+If we compare the different treatment type groups without distinguishing different dosage levels, we find no statistically significant difference. That is to say that we do not have sufficient evidence to conclude that "Subjects given any amount orange juice exhibited more/less tooth growth than subjects given any amount of asorbicacid."
+
+In summary, we were able to conclude that increasing the dosage levels for either treatment lead to significantly more growth than lower dosage levels. Up to and including 1 mg/day, we found that the orange juice treatment group exhibited significantly more tooth growth than the asorbic acid group. There was not enough evidence, however, to conclude the same at the 2 mg/day dosage.
